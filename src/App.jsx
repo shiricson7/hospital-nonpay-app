@@ -104,30 +104,68 @@ export default function HospitalNonPayApp() {
             margin: 0;
           }
           
-          * {
-            visibility: hidden !important;
+          html, body {
+            height: 100mm !important;
+            width: 100mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
           }
           
-          #printArea,
-          #printArea * {
-            visibility: visible !important;
+          body > * {
+            display: none !important;
+          }
+          
+          #root {
+            display: block !important;
+            height: 100mm !important;
+            width: 100mm !important;
+            overflow: hidden !important;
+          }
+          
+          #root > * {
+            display: none !important;
           }
           
           #printArea {
+            display: block !important;
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100mm !important;
             height: 100mm !important;
+            max-height: 100mm !important;
             padding: 5mm !important;
+            margin: 0 !important;
             background: white !important;
-            display: block !important;
-            page-break-after: avoid !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
           }
           
-          body {
-            margin: 0 !important;
-            padding: 0 !important;
+          #printArea * {
+            display: block !important;
+            page-break-inside: avoid !important;
+          }
+          
+          #printArea table {
+            display: table !important;
+          }
+          
+          #printArea thead {
+            display: table-header-group !important;
+          }
+          
+          #printArea tbody {
+            display: table-row-group !important;
+          }
+          
+          #printArea tr {
+            display: table-row !important;
+          }
+          
+          #printArea th,
+          #printArea td {
+            display: table-cell !important;
           }
         }
         
