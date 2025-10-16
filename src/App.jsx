@@ -92,17 +92,7 @@ export default function HospitalNonPayApp() {
   };
 
   const handlePrint = () => {
-    // 인쇄 영역 표시
-    const printArea = document.getElementById('printArea');
-    printArea.style.display = 'block';
-    
-    // 인쇄 실행
     window.print();
-    
-    // 인쇄 후 다시 숨김
-    setTimeout(() => {
-      printArea.style.display = 'none';
-    }, 100);
   };
 
   return (
@@ -114,24 +104,36 @@ export default function HospitalNonPayApp() {
             margin: 0;
           }
           
-          body * {
-            visibility: hidden;
+          * {
+            visibility: hidden !important;
+          }
+          
+          #printArea,
+          #printArea * {
+            visibility: visible !important;
           }
           
           #printArea {
-            visibility: visible;
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100mm;
-            height: 100mm;
-            padding: 5mm;
-            background: white;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100mm !important;
+            height: 100mm !important;
+            padding: 5mm !important;
+            background: white !important;
             display: block !important;
+            page-break-after: avoid !important;
           }
           
-          #printArea * {
-            visibility: visible;
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
+        
+        @media screen {
+          #printArea {
+            display: none;
           }
         }
       `}</style>
@@ -298,24 +300,24 @@ export default function HospitalNonPayApp() {
         )}
       </div>
 
-      <div id="printArea" style={{ display: 'none', position: 'fixed', left: '-9999px' }}>
-        <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
+      <div id="printArea">
+        <div style={{ fontSize: '11px', lineHeight: '1.3', fontFamily: 'Arial, sans-serif' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '5px' }}>
             비급여 항목 안내
           </h2>
           
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', marginBottom: '8px' }}>
             <thead>
               <tr>
-                <th style={{ borderBottom: '2px solid #000', padding: '5px', textAlign: 'left' }}>항목</th>
-                <th style={{ borderBottom: '2px solid #000', padding: '5px', textAlign: 'right' }}>금액</th>
+                <th style={{ borderBottom: '2px solid #000', padding: '4px 0', textAlign: 'left', fontSize: '12px', fontWeight: 'bold' }}>항목</th>
+                <th style={{ borderBottom: '2px solid #000', padding: '4px 0', textAlign: 'right', fontSize: '12px', fontWeight: 'bold' }}>금액</th>
               </tr>
             </thead>
             <tbody>
-              {selectedItems.map((item, index) => (
+              {selectedItems.map((item) => (
                 <tr key={item.id}>
-                  <td style={{ borderBottom: '1px solid #ddd', padding: '5px' }}>{item.name}</td>
-                  <td style={{ borderBottom: '1px solid #ddd', padding: '5px', textAlign: 'right' }}>
+                  <td style={{ borderBottom: '1px solid #ccc', padding: '4px 0', fontSize: '11px' }}>{item.name}</td>
+                  <td style={{ borderBottom: '1px solid #ccc', padding: '4px 0', textAlign: 'right', fontSize: '11px' }}>
                     {item.price.toLocaleString()}원
                   </td>
                 </tr>
@@ -323,15 +325,16 @@ export default function HospitalNonPayApp() {
             </tbody>
           </table>
           
-          <div style={{ marginTop: '15px', paddingTop: '10px', borderTop: '2px solid #000' }}>
+          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '2px solid #000' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 'bold' }}>
               <span>총액:</span>
               <span>{totalPrice.toLocaleString()}원</span>
             </div>
           </div>
           
-          <div style={{ marginTop: '15px', fontSize: '10px', color: '#666', textAlign: 'center' }}>
-            <p>본 항목은 건강보험이 적용되지 않는 비급여 항목입니다.</p>
+          <div style={{ marginTop: '12px', fontSize: '9px', color: '#666', textAlign: 'center', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+            <p style={{ margin: 0 }}>본 항목은 건강보험이 적용되지 않는 비급여 항목입니다.</p>
+            <p style={{ margin: '3px 0 0 0' }}>문의사항이 있으시면 접수처에 말씀해 주세요.</p>
           </div>
         </div>
       </div>
