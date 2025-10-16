@@ -112,22 +112,18 @@ export default function HospitalNonPayApp() {
             overflow: hidden !important;
           }
           
-          body > * {
+          body > div:not(#root) {
             display: none !important;
           }
           
-          #root {
-            display: block !important;
-            height: 100mm !important;
-            width: 100mm !important;
-            overflow: hidden !important;
-          }
-          
-          #root > * {
-            display: none !important;
+          #root > div:first-child {
+            visibility: hidden !important;
+            position: absolute !important;
+            left: -9999px !important;
           }
           
           #printArea {
+            visibility: visible !important;
             display: block !important;
             position: absolute !important;
             left: 0 !important;
@@ -142,30 +138,9 @@ export default function HospitalNonPayApp() {
             box-sizing: border-box !important;
           }
           
+          #printArea,
           #printArea * {
-            display: block !important;
-            page-break-inside: avoid !important;
-          }
-          
-          #printArea table {
-            display: table !important;
-          }
-          
-          #printArea thead {
-            display: table-header-group !important;
-          }
-          
-          #printArea tbody {
-            display: table-row-group !important;
-          }
-          
-          #printArea tr {
-            display: table-row !important;
-          }
-          
-          #printArea th,
-          #printArea td {
-            display: table-cell !important;
+            visibility: visible !important;
           }
         }
         
