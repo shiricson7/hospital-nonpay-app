@@ -102,13 +102,13 @@ export default function HospitalNonPayApp() {
           }
           
           @page {
-            size: 100mm 100mm;
+            size: 98mm 98mm;
             margin: 0;
           }
           
           html, body {
-            width: 100mm;
-            height: 100mm;
+            width: 98mm;
+            height: 98mm;
             margin: 0;
             padding: 0;
           }
@@ -119,8 +119,8 @@ export default function HospitalNonPayApp() {
           
           .print-area {
             display: block !important;
-            width: 100mm !important;
-            height: 100mm !important;
+            width: 98mm !important;
+            height: 98mm !important;
             padding: 5mm !important;
             font-family: 'Malgun Gothic', Arial, sans-serif !important;
             font-size: 10px !important;
