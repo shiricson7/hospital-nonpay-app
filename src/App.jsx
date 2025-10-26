@@ -91,45 +91,54 @@ export default function HospitalNonPayApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <>
+      {/* 인쇄 전용 스타일 */}
       <style>{`
         @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          
-          body {
+          * {
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            box-sizing: border-box;
           }
           
-          .no-print {
+          @page {
+            size: 100mm 100mm;
+            margin: 0;
+          }
+          
+          html, body {
+            width: 100mm;
+            height: 100mm;
+            margin: 0;
+            padding: 0;
+          }
+          
+          .screen-only {
             display: none !important;
           }
           
-          .print-only {
-            display: flex !important;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100vh;
+          .print-area {
+            display: block !important;
+            width: 100mm !important;
+            height: 100mm !important;
+            padding: 5mm !important;
+            font-family: 'Malgun Gothic', Arial, sans-serif !important;
+            font-size: 10px !important;
+            line-height: 1.3 !important;
+            color: #000 !important;
+            background: white !important;
           }
         }
         
         @media screen {
-          .print-only {
-            display: none !important;
+          .print-area {
+            display: none;
           }
         }
       `}</style>
 
-      {/* 화면 표시용 */}
-      <div className="no-print">
+      {/* 화면 표시 영역 */}
+      <div className="screen-only min-h-screen bg-gray-50 p-4">
         <div className="max-w-6xl mx-auto mb-6">
           <div className="bg-white rounded-lg shadow p-4 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">병원 비급여 안내</h1>
@@ -293,102 +302,106 @@ export default function HospitalNonPayApp() {
         </div>
       </div>
 
-      {/* 인쇄용 영역 */}
-      <div className="print-only">
-        <div style={{
-          width: '100mm',
-          maxWidth: '100mm',
-          padding: '8mm',
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '12px',
-          lineHeight: '1.4',
-          boxSizing: 'border-box',
-          border: '2px solid #000',
-          backgroundColor: 'white'
+      {/* 인쇄 전용 영역 - 100x100mm */}
+      <div className="print-area">
+        <div style={{ 
+          textAlign: 'center', 
+          fontSize: '14px', 
+          fontWeight: 'bold', 
+          marginBottom: '6px',
+          paddingBottom: '4px',
+          borderBottom: '2px solid #000'
         }}>
-          <h2 style={{
-            fontSize: '18px',
-            fontWeight: 'bold',
-            textAlign: 'center',
-            marginBottom: '10px',
-            paddingBottom: '8px',
-            borderBottom: '2px solid #000'
-          }}>
-            비급여 항목 안내
-          </h2>
-          
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            marginTop: '10px',
-            marginBottom: '10px'
-          }}>
-            <thead>
-              <tr>
-                <th style={{
-                  borderBottom: '2px solid #000',
-                  padding: '6px 0',
-                  textAlign: 'left',
-                  fontSize: '13px',
-                  fontWeight: 'bold'
-                }}>항목</th>
-                <th style={{
-                  borderBottom: '2px solid #000',
-                  padding: '6px 0',
+          비급여 항목 안내
+        </div>
+        
+        <table style={{ 
+          width: '100%', 
+          borderCollapse: 'collapse',
+          marginTop: '6px'
+        }}>
+          <thead>
+            <tr>
+              <th style={{ 
+                borderBottom: '1px solid #000', 
+                padding: '3px 0', 
+                textAlign: 'left',
+                fontSize: '11px',
+                fontWeight: 'bold'
+              }}>
+                항목
+              </th>
+              <th style={{ 
+                borderBottom: '1px solid #000', 
+                padding: '3px 0', 
+                textAlign: 'right',
+                fontSize: '11px',
+                fontWeight: 'bold'
+              }}>
+                금액
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedItems.map((item) => (
+              <tr key={item.id}>
+                <td style={{ 
+                  borderBottom: '1px solid #ddd', 
+                  padding: '3px 0',
+                  fontSize: '10px'
+                }}>
+                  {item.name}
+                </td>
+                <td style={{ 
+                  borderBottom: '1px solid #ddd', 
+                  padding: '3px 0', 
                   textAlign: 'right',
-                  fontSize: '13px',
-                  fontWeight: 'bold'
-                }}>금액</th>
+                  fontSize: '10px'
+                }}>
+                  {item.price.toLocaleString()}원
+                </td>
               </tr>
-            </thead>
+            ))}
+          </tbody>
+        </table>
+        
+        <div style={{ 
+          marginTop: '8px', 
+          paddingTop: '6px', 
+          borderTop: '2px solid #000'
+        }}>
+          <table style={{ width: '100%' }}>
             <tbody>
-              {selectedItems.map((item) => (
-                <tr key={item.id}>
-                  <td style={{
-                    borderBottom: '1px solid #ccc',
-                    padding: '5px 0',
-                    fontSize: '12px'
-                  }}>{item.name}</td>
-                  <td style={{
-                    borderBottom: '1px solid #ccc',
-                    padding: '5px 0',
-                    textAlign: 'right',
-                    fontSize: '12px'
-                  }}>{item.price.toLocaleString()}원</td>
-                </tr>
-              ))}
+              <tr>
+                <td style={{ 
+                  fontSize: '12px', 
+                  fontWeight: 'bold' 
+                }}>
+                  총액:
+                </td>
+                <td style={{ 
+                  textAlign: 'right', 
+                  fontSize: '12px', 
+                  fontWeight: 'bold' 
+                }}>
+                  {totalPrice.toLocaleString()}원
+                </td>
+              </tr>
             </tbody>
           </table>
-          
-          <div style={{
-            marginTop: '12px',
-            paddingTop: '10px',
-            borderTop: '2px solid #000'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: '16px',
-              fontWeight: 'bold'
-            }}>
-              <span>총액:</span>
-              <span>{totalPrice.toLocaleString()}원</span>
-            </div>
-          </div>
-          
-          <div style={{
-            marginTop: '15px',
-            fontSize: '10px',
-            color: '#666',
-            textAlign: 'center',
-            borderTop: '1px solid #ccc',
-            paddingTop: '10px'
-          }}>
-            <p style={{ margin: 0 }}>본 항목은 건강보험이 적용되지 않는 비급여 항목입니다.</p>
-            <p style={{ margin: '5px 0 0 0' }}>문의사항이 있으시면 접수처에 말씀해 주세요.</p>
-          </div>
+        </div>
+        
+        <div style={{ 
+          marginTop: '10px', 
+          paddingTop: '6px', 
+          borderTop: '1px solid #ccc',
+          fontSize: '8px',
+          textAlign: 'center',
+          color: '#666'
+        }}>
+          본 항목은 건강보험이 적용되지 않는 비급여 항목입니다.
         </div>
       </div>
-    </div>
+    </>
   );
 }
