@@ -1,16 +1,58 @@
-# React + Vite
+# 비급여 데스크
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+병원 비급여 항목을 선택하고 합계와 진료 내역을 **50 × 30 mm 라벨**로 안내하는 React 앱입니다.
 
-Currently, two official plugins are available:
+## 실행
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Node.js 24 LTS를 권장합니다. 지원 범위는 Node.js 20.19 이상(20.x), 22.13 이상(22.x), 24 이상입니다.
 
-## React Compiler
+```sh
+npm ci
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+개발 서버 주소는 터미널에 표시됩니다. 배포용 파일은 `npm run build`로 생성하며, `npm run preview`로 빌드 결과를 확인합니다.
 
-## Expanding the ESLint configuration
+## 사용 방법
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. **비급여 안내**에서 이름 검색 또는 분류 필터로 항목을 찾습니다. `/` 키로 검색창에 바로 이동할 수 있습니다.
+2. 항목 카드를 누르면 선택 목록, 합계, 출력할 라벨 수가 갱신됩니다. 같은 카드를 다시 누르거나 선택 목록의 × 버튼으로 해제합니다.
+3. 미리보기의 좌우 버튼으로 각 라벨을 확인하고 **라벨 N장 출력**을 누릅니다. 모바일에서는 아래 고정 출력 버튼을 사용할 수 있습니다.
+4. **항목 관리**에서 분류·항목을 추가하고 이름·금액·분류를 수정합니다. 금액은 0원부터 999,999,999원까지 정수로 입력합니다. 삭제 전에 확인 창이 표시됩니다.
+
+분류와 항목은 기존과 동일한 `nonpay-categories` 키로 이 브라우저의 localStorage에 저장됩니다. 기존 데이터 구조를 유지합니다. 저장 실패나 잘못된 데이터는 화면에 안내하며, 잘못된 저장 데이터를 읽는 것만으로 덮어쓰지는 않습니다. 선택 내역은 새로고침하면 초기화됩니다. 브라우저 또는 사이트 주소가 달라지면 저장 목록이 별개입니다.
+
+## 50 × 30 mm 라벨 출력
+
+- 크기: 가로 50 mm × 세로 30 mm, 페이지 여백 0.
+- 기본적으로 항목 2개를 한 장에 배치합니다. 예: 3개 → 2장, 16개 → 8장.
+- 긴 이름은 필요한 만큼 이어지는 줄과 다음 라벨로 나눕니다. 이어지는 줄은 `↳`로 표시하며, 금액은 해당 이름의 마지막 줄에 한 번만 표시합니다.
+- 모든 라벨에 **전체 합계**와 **페이지 번호**를 표시합니다. 전체 합계는 해당 장의 소계가 아닙니다.
+- 화면 미리보기와 인쇄는 같은 `Label` 컴포넌트를 사용합니다. 마지막 장 뒤에 불필요한 페이지 나누기를 넣지 않습니다.
+
+인쇄 창에서 **라벨 프린터 선택 → 용지 50 × 30 mm → 배율 100% → 여백 없음 → 머리글·바닥글 끄기**를 설정합니다. 프린터 드라이버의 용지 크기도 동일하게 설정하세요. CSS로 지정한 크기가 드라이버 설정을 자동으로 변경하지는 않습니다. 실제 장비의 인쇄 가능 영역과 용지 이송 보정은 첫 시험 출력으로 확인해야 합니다.
+
+## 개발 및 검증
+
+```sh
+npm run lint
+npm test
+npm run build
+npm audit
+npm outdated
+```
+
+단위 테스트는 라벨의 짝수·홀수 분할, 긴 이름 보존, 중복 금액 방지, 기존 저장 형식 호환, 손상된 저장 데이터 처리를 확인합니다. 브라우저에서 선택·검색·미리보기 이동·금액 수정·저장·삭제 취소와 모바일 배치를 확인했습니다. 오프라인 Chromium PDF 렌더링으로 1개·3개·16개 항목과 긴 이름 사례의 크기, 페이지 수, 내용 넘침을 확인했습니다. 실제 프린터의 실물 출력은 별도 확인이 필요합니다.
+
+2026-10-08 기준 직접 의존성을 npm의 최신 안정 버전으로 갱신했습니다. 주요 버전은 React 19.3.0, Vite 8.3.3, Tailwind CSS 4.3.3, ESLint 10.12.0, Lucide React 1.52.0입니다. Tailwind는 `@tailwindcss/vite`와 CSS `@import`를 사용합니다. 이전 PostCSS·Autoprefixer 직접 의존성과 Tailwind 3 설정은 제거했습니다. 재현 가능한 설치를 위해 `package-lock.json`도 함께 갱신했습니다.
+
+## 구조
+
+- `src/App.jsx`: 항목 선택·검색·관리, 화면 레이아웃, 출력 흐름.
+- `src/data.js`: 기본 데이터, 저장 형식 검증, 라벨 분할, 금액 표시.
+- `src/components/Label.jsx`: 미리보기와 출력에서 공유하는 라벨.
+- `src/components/CatalogDialog.jsx`: 추가·수정·삭제 확인 폼.
+- `src/components/Modal.jsx`: 키보드 초점과 Escape 처리를 지원하는 대화상자.
+- `src/App.css`: 반응형 UI와 50 × 30 mm 인쇄 스타일.
+
+적용한 기준: [Material 3 레이아웃·정보 위계](https://m3.material.io/foundations/), [MDN 인쇄 스타일](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries/Printing), [Vite 8 마이그레이션](https://vite.dev/guide/migration.html), [Tailwind Vite 설치](https://tailwindcss.com/docs/installation/using-vite), [ESLint 10 마이그레이션](https://eslint.org/docs/latest/use/migrate-to-10.0.0).
