@@ -1,444 +1,921 @@
-import React, { useState, useEffect } from 'react';
-import { Printer, Plus, Trash2, Settings } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  HeartPulse,
+  Layers3,
+  LayoutGrid,
+  Package,
+  Pencil,
+  Plus,
+  Printer,
+  RotateCcw,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  Syringe,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  buildLabelPages,
+  formatPrice,
+  loadCategories,
+  STORAGE_KEY,
+} from "./data";
+import Label from "./components/Label";
+import CatalogDialog from "./components/CatalogDialog";
+import Modal from "./components/Modal";
+import "./App.css";
 
-const initialCategories = {
-  수액제제: [
-    { id: 1, name: '해열제', price: 30000 },
-    { id: 2, name: '비타민 영양제(소)', price: 35000 },
-    { id: 3, name: '비타민 영양제(대)', price: 40000 },
-    { id: 4, name: '아미노산+비타민 영양제', price: 50000 },
-    { id: 5, name: '아미노산+디팹티벤', price: 70000 },
-    { id: 6, name: '마이어스 칵테일', price: 80000 },
-    { id: 7, name: '복합영양제 (위너프페리)', price: 100000 },
-    { id: 8, name: '페라미플루', price: 80000 }
-  ],
-  검사: [
-    { id: 9, name: '독감, 코로나', price: 40000 },
-    { id: 10, name: '독감', price: 30000 },
-    { id: 11, name: '코로나', price: 20000 },
-    { id: 12, name: '호흡기바이러스 3종', price: 40000 },
-    { id: 13, name: '독감 PCR', price: 60000 },
-    { id: 14, name: '호흡기바이러스 PCR', price: 100000 }
-  ],
-  치료재료: [
-    { id: 15, name: '도지플로', price: 4000 },
-    { id: 16, name: '밴드골드 수액고정 반창고', price: 1000 }
-  ]
+const ALL_CATEGORIES = null;
+const categoryIcons = {
+  수액제제: Syringe,
+  검사: FlaskConical,
+  치료재료: Package,
 };
+const categoryTones = { 수액제제: "purple", 검사: "blue", 치료재료: "amber" };
+const today = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  weekday: "short",
+  timeZone: "Asia/Seoul",
+}).format(new Date());
 
-export default function HospitalNonPayApp() {
-  const [categories, setCategories] = useState(initialCategories);
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [isManageMode, setIsManageMode] = useState(false);
-  const [newCategory, setNewCategory] = useState('');
-  const [newItem, setNewItem] = useState({ name: '', price: '' });
-  const [addingToCategory, setAddingToCategory] = useState(null);
-  const [loadedFromStorage, setLoadedFromStorage] = useState(false);
+export default function App() {
+  const [store, setStore] = useState(loadCategories);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [manageMode, setManageMode] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [dialog, setDialog] = useState(null);
+  const [notice, setNotice] = useState("");
+  const searchRef = useRef(null);
+  const categories = store.categories;
+  const entries = Object.entries(categories);
+  const allItems = entries.flatMap(([category, items]) =>
+    items.map((item) => ({ ...item, category })),
+  );
+  const itemById = new Map(allItems.map((item) => [item.id, item]));
+  const selectedItems = selectedIds
+    .map((id) => itemById.get(id))
+    .filter(Boolean);
+  const selectedSet = new Set(selectedIds);
+  const totalPrice = selectedItems.reduce(
+    (total, item) => total + item.price,
+    0,
+  );
+  const labelPages = buildLabelPages(selectedItems);
+  const currentPreview = Math.min(
+    previewIndex,
+    Math.max(labelPages.length - 1, 0),
+  );
+  const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
+  const visibleEntries = entries
+    .filter(
+      ([category]) =>
+        activeCategory === ALL_CATEGORIES || category === activeCategory,
+    )
+    .map(([category, items]) => [
+      category,
+      items.filter((item) =>
+        `${item.name} ${category}`
+          .toLocaleLowerCase("ko-KR")
+          .includes(normalizedQuery),
+      ),
+    ])
+    .filter(([, items]) => items.length || (!normalizedQuery && manageMode));
+  const visibleCount = visibleEntries.reduce(
+    (total, [, items]) => total + items.length,
+    0,
+  );
 
-  // 로컬 저장된 카테고리 불러오기
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('nonpay-categories');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object') {
-          setCategories(parsed);
-        }
+    function handleKey(event) {
+      if (
+        event.key === "/" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !dialog &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)
+      ) {
+        event.preventDefault();
+        searchRef.current?.focus();
       }
-    } catch (e) {
-      console.warn('Failed to load saved categories', e);
     }
-    setLoadedFromStorage(true);
-  }, []);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [dialog]);
 
-  // 변경된 카테고리 저장
   useEffect(() => {
-    if (!loadedFromStorage) return;
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  function saveCategories(nextCategories, message) {
+    let warning = "";
     try {
-      localStorage.setItem('nonpay-categories', JSON.stringify(categories));
-    } catch (e) {
-      console.warn('Failed to save categories', e);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextCategories));
+    } catch {
+      warning =
+        "브라우저에 저장하지 못했습니다. 현재 화면의 변경은 적용되지만 새로고침하면 사라질 수 있습니다.";
     }
-  }, [categories, loadedFromStorage]);
+    setStore({ categories: nextCategories, warning });
+    setNotice(message);
+  }
 
-  const toggleItem = (category, item) => {
-    const itemWithCategory = { ...item, category };
-    const isSelected = selectedItems.some((i) => i.id === item.id);
+  function toggleItem(id) {
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+  }
 
-    if (isSelected) {
-      setSelectedItems(selectedItems.filter((i) => i.id !== item.id));
-    } else {
-      setSelectedItems([...selectedItems, itemWithCategory]);
-    }
-  };
-
-  const totalPrice = selectedItems.reduce((sum, item) => sum + item.price, 0);
-  const selectedNames = selectedItems.map((item) => item.name).join(', ');
-  const printTitle =
-    selectedItems.length > 0
-      ? `오늘 치료받은 비급여 목록입니다 ${selectedNames} 총 ${totalPrice.toLocaleString()}원입니다.`
-      : '오늘 치료받은 비급여 목록입니다 항목을 선택해 주세요.';
-
-  const addCategory = () => {
-    if (newCategory.trim() && !categories[newCategory]) {
-      setCategories({ ...categories, [newCategory]: [] });
-      setNewCategory('');
-    }
-  };
-
-  const deleteCategory = (categoryName) => {
-    const newCategories = { ...categories };
-    delete newCategories[categoryName];
-    setCategories(newCategories);
-    setSelectedItems(selectedItems.filter((item) => item.category !== categoryName));
-  };
-
-  const addItem = (categoryName) => {
-    if (newItem.name.trim() && newItem.price) {
-      const newId = Math.max(...Object.values(categories).flat().map((i) => i.id), 0) + 1;
-      const item = {
-        id: newId,
-        name: newItem.name,
-        price: parseInt(newItem.price, 10)
-      };
-
-      setCategories({
-        ...categories,
-        [categoryName]: [...categories[categoryName], item]
+  function saveDialog(values) {
+    const nextCategories = { ...categories };
+    if (dialog.type === "category") {
+      Object.defineProperty(nextCategories, values.name, {
+        value: [],
+        enumerable: true,
+        configurable: true,
+        writable: true,
       });
-
-      setNewItem({ name: '', price: '' });
-      setAddingToCategory(null);
+      setActiveCategory(values.name);
+    } else if (dialog.type === "delete-category") {
+      const removed = new Set(
+        categories[dialog.category].map((item) => item.id),
+      );
+      delete nextCategories[dialog.category];
+      setSelectedIds((ids) => ids.filter((id) => !removed.has(id)));
+      if (activeCategory === dialog.category) setActiveCategory(ALL_CATEGORIES);
+    } else if (dialog.type === "delete-item") {
+      nextCategories[dialog.category] = categories[dialog.category].filter(
+        (item) => item.id !== dialog.item.id,
+      );
+      setSelectedIds((ids) => ids.filter((id) => id !== dialog.item.id));
+    } else if (dialog.type === "edit") {
+      nextCategories[dialog.category] = categories[dialog.category].filter(
+        (item) => item.id !== dialog.item.id,
+      );
+      const edited = {
+        id: dialog.item.id,
+        name: values.name,
+        price: values.price,
+      };
+      if (values.category === dialog.category)
+        nextCategories[values.category] = categories[values.category].map(
+          (item) => (item.id === edited.id ? edited : item),
+        );
+      else
+        nextCategories[values.category] = [
+          ...nextCategories[values.category],
+          edited,
+        ];
+    } else {
+      let id = 1;
+      while (itemById.has(id)) id += 1;
+      nextCategories[values.category] = [
+        ...categories[values.category],
+        { id, name: values.name, price: values.price },
+      ];
     }
-  };
+    const message = dialog.type.startsWith("delete")
+      ? "삭제했습니다."
+      : dialog.type === "edit"
+        ? "변경 사항을 저장했습니다."
+        : dialog.type === "category"
+          ? "새 분류를 추가했습니다."
+          : "새 항목을 추가했습니다.";
+    saveCategories(nextCategories, message);
+    setDialog(null);
+  }
 
-  const deleteItem = (categoryName, itemId) => {
-    setCategories({
-      ...categories,
-      [categoryName]: categories[categoryName].filter((item) => item.id !== itemId)
-    });
-    setSelectedItems(selectedItems.filter((item) => item.id !== itemId));
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
+  function switchMode(value) {
+    setManageMode(value);
+    setQuery("");
+    setActiveCategory(ALL_CATEGORIES);
+  }
 
   return (
     <>
-      {/* 출력 전용 스타일 */}
-      <style>{`
-        @media print {
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-
-          @page {
-            size: 100mm 100mm;
-            margin: 0;
-          }
-
-          html, body {
-            width: 100mm;
-            height: 100mm;
-            margin: 0;
-            padding: 0;
-          }
-
-          .screen-only {
-            display: none !important;
-          }
-
-          .print-area {
-            display: block !important;
-            width: 100mm !important;
-            height: 100mm !important;
-            padding: 6mm !important;
-            font-family: 'Malgun Gothic', Arial, sans-serif !important;
-            font-size: 10px !important;
-            line-height: 1.3 !important;
-            color: #000 !important;
-            background: white !important;
-          }
-        }
-
-        @media screen {
-          .print-area {
-            display: none;
-          }
-        }
-      `}</style>
-
-      {/* 화면용 영역 */}
-      <div className="screen-only min-h-screen bg-gray-50 p-4">
-        <div className="max-w-6xl mx-auto mb-6">
-          <div className="bg-white rounded-lg shadow p-4 flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">병원 비급여 가격 안내</h1>
-              <p className="text-sm text-gray-600 mt-1">선택 후 출력하면 100x100mm로 인쇄됩니다.</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsManageMode(!isManageMode)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-              >
-                <Settings size={20} />
-                {isManageMode ? '선택 모드' : '관리 모드'}
+      <div className="app-shell screen-only">
+        <aside className="sidebar" aria-label="주 메뉴">
+          <a className="brand" href="#main-content">
+            <span className="brand-icon">
+              <Stethoscope size={24} strokeWidth={1.8} />
+            </span>
+            <span>
+              비급여 데스크<small>더 간편한 진료 안내</small>
+            </span>
+          </a>
+          <div className="sidebar-section-label">WORKSPACE</div>
+          <nav className="sidebar-nav">
+            <button
+              className={`nav-item ${!manageMode ? "active" : ""}`}
+              aria-label="비급여 안내"
+              onClick={() => switchMode(false)}
+              aria-current={!manageMode ? "page" : undefined}
+            >
+              <LayoutGrid size={19} />
+              <span>비급여 안내</span>
+              {!manageMode ? <span className="nav-dot" /> : null}
+            </button>
+            <button
+              className={`nav-item ${manageMode ? "active" : ""}`}
+              aria-label="항목 관리"
+              onClick={() => switchMode(true)}
+              aria-current={manageMode ? "page" : undefined}
+            >
+              <Settings2 size={19} />
+              <span>항목 관리</span>
+              {manageMode ? <span className="nav-dot" /> : null}
+            </button>
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="sidebar-tip">
+              <span className="tip-icon">
+                <Printer size={19} />
+              </span>
+              <strong>작은 라벨, 간편한 안내</strong>
+              <p>
+                50 × 30 mm 라벨에
+                <br />
+                진료 내역을 깔끔하게 출력하세요.
+              </p>
+              <button onClick={() => setDialog({ type: "help" })}>
+                출력 설정 안내 <ArrowRight size={14} />
               </button>
-              {selectedItems.length > 0 && !isManageMode && (
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <Printer size={20} />
-                  출력
-                </button>
-              )}
+            </div>
+            <div className="local-storage-note">
+              <ShieldCheck size={15} />
+              <span>항목은 이 브라우저에 저장됩니다</span>
             </div>
           </div>
-        </div>
-
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            {isManageMode && (
-              <div className="bg-white rounded-lg shadow p-4">
-                <h3 className="font-bold text-lg mb-3">카테고리 추가</h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="새 카테고리 이름"
-                    className="flex-1 px-3 py-2 border rounded-lg"
-                  />
-                  <button
-                    onClick={addCategory}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    추가
-                  </button>
+        </aside>
+        <div className="workspace">
+          <header className="topbar">
+            <div className="breadcrumb">
+              <span>병원 업무</span>
+              <ChevronRight size={14} />
+              <strong>{manageMode ? "항목 관리" : "비급여 안내"}</strong>
+            </div>
+            <div className="topbar-end">
+              <time>{today}</time>
+              <span className="desk-avatar">
+                <HeartPulse size={19} />
+              </span>
+              <span className="desk-name">진료 데스크</span>
+            </div>
+          </header>
+          <main className="main-content" id="main-content">
+            <div className="page-heading">
+              <div>
+                <div className="eyebrow">
+                  <span />
+                  NON-COVERED CARE
                 </div>
+                <h1>
+                  {manageMode ? "항목 관리" : "비급여 안내"}
+                  <span className="heading-dot">.</span>
+                </h1>
+                <p>
+                  {manageMode
+                    ? "진료 항목과 금액을 관리하세요. 변경 사항은 자동으로 저장됩니다."
+                    : "진료 항목을 선택하고, 안내 라벨을 바로 출력하세요."}
+                </p>
               </div>
-            )}
-
-            {Object.entries(categories).map(([categoryName, items]) => (
-              <div key={categoryName} className="bg-white rounded-lg shadow p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-bold text-lg text-blue-600">{categoryName}</h3>
-                  {isManageMode && (
-                    <div className="flex gap-2">
+              <div className="heading-actions">
+                {manageMode ? (
+                  <button
+                    className="button button-secondary"
+                    onClick={() => switchMode(false)}
+                  >
+                    <ChevronLeft size={16} />
+                    안내 화면으로
+                  </button>
+                ) : (
+                  <span className="label-size-badge">
+                    <Printer size={15} />
+                    라벨 출력<span>50 × 30 mm</span>
+                  </span>
+                )}
+              </div>
+            </div>
+            {store.warning ? (
+              <div className="storage-warning" role="alert">
+                <CircleHelp size={18} />
+                {store.warning}
+              </div>
+            ) : null}
+            <div className="overview-grid">
+              <div className="overview-card">
+                <span className="stat-icon purple">
+                  <ClipboardList size={21} />
+                </span>
+                <div>
+                  <span className="stat-label">등록된 진료 항목</span>
+                  <strong>
+                    {allItems.length}
+                    <small>개</small>
+                  </strong>
+                </div>
+                <span className="stat-caption">{entries.length}개 분류</span>
+              </div>
+              <div className="overview-card">
+                <span className="stat-icon blue">
+                  <Check size={22} />
+                </span>
+                <div>
+                  <span className="stat-label">선택한 항목</span>
+                  <strong>
+                    {selectedItems.length}
+                    <small>개</small>
+                  </strong>
+                </div>
+                <span className="stat-caption">
+                  {selectedItems.length ? "선택 완료" : "항목을 선택해 주세요"}
+                </span>
+              </div>
+              <div className="overview-card">
+                <span className="stat-icon amber">
+                  <Layers3 size={21} />
+                </span>
+                <div>
+                  <span className="stat-label">출력할 라벨</span>
+                  <strong>
+                    {labelPages.length}
+                    <small>장</small>
+                  </strong>
+                </div>
+                <span className="stat-caption">한 장에 2줄씩</span>
+              </div>
+            </div>
+            <div className={`content-grid ${manageMode ? "manage-grid" : ""}`}>
+              <section
+                className="catalog-panel panel"
+                aria-labelledby="catalog-title"
+              >
+                <div className="panel-heading">
+                  <div>
+                    <h2 id="catalog-title">
+                      {manageMode ? "등록 항목" : "진료 항목"}
+                      <span className="count-badge">{allItems.length}</span>
+                    </h2>
+                    <p>
+                      {manageMode
+                        ? "항목을 추가하거나 이름과 금액을 수정할 수 있어요."
+                        : "안내할 항목을 눌러 선택해 주세요."}
+                    </p>
+                  </div>
+                  {manageMode ? (
+                    <div className="catalog-actions">
                       <button
-                        onClick={() =>
-                          setAddingToCategory(addingToCategory === categoryName ? null : categoryName)
-                        }
-                        className="p-1 text-green-600 hover:bg-green-50 rounded"
+                        className="button button-secondary button-small"
+                        onClick={() => setDialog({ type: "category" })}
                       >
-                        <Plus size={20} />
+                        <Plus size={15} />
+                        분류 추가
                       </button>
                       <button
-                        onClick={() => deleteCategory(categoryName)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        className="button button-primary button-small"
+                        disabled={!entries.length}
+                        onClick={() =>
+                          setDialog({
+                            type: "item",
+                            category:
+                              activeCategory === ALL_CATEGORIES
+                                ? undefined
+                                : activeCategory,
+                          })
+                        }
                       >
-                        <Trash2 size={20} />
+                        <Plus size={15} />
+                        항목 추가
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="quiet-icon">
+                      <ClipboardList size={21} />
+                    </span>
+                  )}
+                </div>
+                <div className="catalog-tools">
+                  <div className="search-field">
+                    <Search size={19} />
+                    <input
+                      ref={searchRef}
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="항목 이름으로 검색하세요"
+                      aria-label="진료 항목 검색"
+                    />
+                    {query ? (
+                      <button
+                        className="icon-button"
+                        aria-label="검색어 지우기"
+                        onClick={() => {
+                          setQuery("");
+                          searchRef.current?.focus();
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    ) : (
+                      <kbd>/</kbd>
+                    )}
+                  </div>
+                  <div className="category-filters" aria-label="분류 필터">
+                    <button
+                      className={`filter-chip ${activeCategory === ALL_CATEGORIES ? "active" : ""}`}
+                      onClick={() => setActiveCategory(ALL_CATEGORIES)}
+                      aria-pressed={activeCategory === ALL_CATEGORIES}
+                    >
+                      전체<span>{allItems.length}</span>
+                    </button>
+                    {entries.map(([category, items]) => (
+                      <button
+                        key={category}
+                        className={`filter-chip ${activeCategory === category ? "active" : ""}`}
+                        onClick={() => setActiveCategory(category)}
+                        aria-pressed={activeCategory === category}
+                      >
+                        {category}
+                        <span>{items.length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="catalog-body">
+                  {visibleEntries.length ? (
+                    visibleEntries.map(([category, items]) => {
+                      const Icon = Object.hasOwn(categoryIcons, category)
+                        ? categoryIcons[category]
+                        : FileText;
+                      const tone = Object.hasOwn(categoryTones, category)
+                        ? categoryTones[category]
+                        : "purple";
+                      const groupSelected = items.filter((item) =>
+                        selectedSet.has(item.id),
+                      ).length;
+                      return (
+                        <section
+                          className="category-section"
+                          key={category}
+                          aria-label={category}
+                        >
+                          <div className="category-heading">
+                            <div>
+                              <span className={`category-icon ${tone}`}>
+                                <Icon size={16} />
+                              </span>
+                              <h3>{category}</h3>
+                              <span className="category-count">
+                                {items.length}
+                              </span>
+                            </div>
+                            {manageMode ? (
+                              <div className="category-controls">
+                                <button
+                                  className="text-button"
+                                  onClick={() =>
+                                    setDialog({ type: "item", category })
+                                  }
+                                >
+                                  <Plus size={14} />
+                                  항목 추가
+                                </button>
+                                <button
+                                  className="icon-button delete-button"
+                                  aria-label={`${category} 분류 삭제`}
+                                  onClick={() =>
+                                    setDialog({
+                                      type: "delete-category",
+                                      category,
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="category-selection">
+                                {groupSelected ? `${groupSelected}개 선택` : ""}
+                              </span>
+                            )}
+                          </div>
+                          <div className="items-grid">
+                            {items.map((item) =>
+                              manageMode ? (
+                                <div
+                                  className="item-card management-card"
+                                  key={item.id}
+                                >
+                                  <div className="item-details">
+                                    <span className="item-name">
+                                      {item.name}
+                                    </span>
+                                    <span className="item-price">
+                                      {formatPrice(item.price)}
+                                      <small>원</small>
+                                    </span>
+                                  </div>
+                                  <div className="item-actions">
+                                    <button
+                                      className="icon-button"
+                                      aria-label={`${item.name} 수정`}
+                                      onClick={() =>
+                                        setDialog({
+                                          type: "edit",
+                                          category,
+                                          item,
+                                        })
+                                      }
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      className="icon-button delete-button"
+                                      aria-label={`${item.name} 삭제`}
+                                      onClick={() =>
+                                        setDialog({
+                                          type: "delete-item",
+                                          category,
+                                          item,
+                                        })
+                                      }
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  className={`item-card ${selectedSet.has(item.id) ? "selected" : ""}`}
+                                  key={item.id}
+                                  aria-pressed={selectedSet.has(item.id)}
+                                  onClick={() => toggleItem(item.id)}
+                                >
+                                  <span className="item-details">
+                                    <span className="item-name">
+                                      {item.name}
+                                    </span>
+                                    <span className="item-price">
+                                      {formatPrice(item.price)}
+                                      <small>원</small>
+                                    </span>
+                                  </span>
+                                  <span
+                                    className="selection-check"
+                                    aria-hidden="true"
+                                  >
+                                    {selectedSet.has(item.id) ? (
+                                      <Check size={14} strokeWidth={3} />
+                                    ) : (
+                                      <Plus size={15} />
+                                    )}
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                          {!items.length ? (
+                            <div className="empty-category">
+                              등록된 항목이 없습니다. 위의 ‘항목 추가’로
+                              시작하세요.
+                            </div>
+                          ) : null}
+                        </section>
+                      );
+                    })
+                  ) : (
+                    <div className="catalog-empty">
+                      <Search size={29} />
+                      <h3>
+                        {entries.length
+                          ? "검색 결과가 없습니다"
+                          : "등록된 분류가 없습니다"}
+                      </h3>
+                      <p>
+                        {entries.length
+                          ? "다른 검색어를 입력하거나 분류를 변경해 주세요."
+                          : "항목 관리에서 새 분류와 진료 항목을 추가해 주세요."}
+                      </p>
+                      <button
+                        className="button button-secondary button-small"
+                        onClick={() => {
+                          if (!entries.length) {
+                            switchMode(true);
+                            setDialog({ type: "category" });
+                          } else {
+                            setQuery("");
+                            setActiveCategory(ALL_CATEGORIES);
+                          }
+                        }}
+                      >
+                        {entries.length ? "필터 초기화" : "분류 추가"}
                       </button>
                     </div>
                   )}
                 </div>
-
-                {isManageMode && addingToCategory === categoryName && (
-                  <div className="mb-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        value={newItem.name}
-                        onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                        placeholder="항목 이름"
-                        className="flex-1 px-3 py-2 border rounded-lg"
-                      />
-                      <input
-                        type="number"
-                        value={newItem.price}
-                        onChange={(e) => setNewItem({ ...newItem, price: e.target.value })}
-                        placeholder="가격"
-                        className="w-32 px-3 py-2 border rounded-lg"
-                      />
+                <footer className="catalog-footer">
+                  <span>
+                    <ShieldCheck size={14} />
+                    비급여 항목은 건강보험이 적용되지 않는 비용입니다.
+                  </span>
+                  <span>{visibleCount}개 항목</span>
+                </footer>
+              </section>
+              {!manageMode ? (
+                <aside
+                  className="selection-column"
+                  aria-label="선택 내역과 라벨 출력"
+                >
+                  <section
+                    className="selection-panel panel"
+                    id="selection-summary"
+                  >
+                    <div className="panel-heading">
+                      <h2>
+                        선택 내역
+                        <span className="count-badge">
+                          {selectedItems.length}
+                        </span>
+                      </h2>
+                      <button
+                        className="text-button reset-button"
+                        disabled={!selectedItems.length}
+                        onClick={() => {
+                          setSelectedIds([]);
+                          setPreviewIndex(0);
+                        }}
+                      >
+                        <RotateCcw size={13} />
+                        초기화
+                      </button>
                     </div>
-                    <button
-                      onClick={() => addItem(categoryName)}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      항목 추가
-                    </button>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {items.map((item) => (
+                    {selectedItems.length ? (
+                      <ol className="selected-list">
+                        {selectedItems.map((item, index) => (
+                          <li key={item.id}>
+                            <span className="selection-number">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <div className="selected-item-description">
+                              <strong>{item.name}</strong>
+                              <small>{item.category}</small>
+                            </div>
+                            <span className="selected-item-price">
+                              {formatPrice(item.price)}
+                              <small>원</small>
+                            </span>
+                            <button
+                              className="icon-button remove-button"
+                              aria-label={`${item.name} 선택 해제`}
+                              onClick={() => toggleItem(item.id)}
+                            >
+                              <X size={15} />
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="selection-empty">
+                        <span>
+                          <ClipboardList size={28} strokeWidth={1.5} />
+                        </span>
+                        <strong>아직 선택한 항목이 없어요</strong>
+                        <p>
+                          왼쪽에서 진료 항목을 선택하면
+                          <br />
+                          금액과 라벨을 확인할 수 있어요.
+                        </p>
+                      </div>
+                    )}
+                    <div className="total-block">
+                      <div>
+                        <span>총 안내 금액</span>
+                        <small>
+                          선택한 {selectedItems.length}개 항목의 합계
+                        </small>
+                      </div>
+                      <strong>
+                        {formatPrice(totalPrice)}
+                        <small>원</small>
+                      </strong>
+                    </div>
+                    <div className="print-action">
+                      <button
+                        className="button button-primary print-button"
+                        disabled={!selectedItems.length}
+                        onClick={() => window.print()}
+                      >
+                        <Printer size={18} />
+                        {labelPages.length
+                          ? `라벨 ${labelPages.length}장 출력`
+                          : "라벨 출력"}
+                        <ArrowRight size={17} />
+                      </button>
+                      <p>50 × 30 mm · 한 장에 2줄 · 자동 분할</p>
+                    </div>
+                  </section>
+                  <section
+                    className="preview-panel panel"
+                    aria-labelledby="preview-title"
+                  >
+                    <div className="panel-heading">
+                      <h2 id="preview-title">
+                        <FileText size={17} />
+                        라벨 미리보기
+                      </h2>
+                      <span className="preview-size">50 × 30 mm</span>
+                    </div>
                     <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                      className={`preview-stage ${!labelPages.length ? "empty-preview-stage" : ""}`}
                     >
-                      <div className="flex items-center gap-3 flex-1">
-                        {!isManageMode && (
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.some((i) => i.id === item.id)}
-                            onChange={() => toggleItem(categoryName, item)}
-                            className="w-5 h-5"
-                          />
-                        )}
-                        <span className="font-medium">{item.name}</span>
+                      <div className="dimension-width">
+                        <span>50 mm</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{item.price.toLocaleString()}원</span>
-                        {isManageMode && (
-                          <button
-                            onClick={() => deleteItem(categoryName, item.id)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {!isManageMode && (
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow p-4 sticky top-4">
-                <h3 className="font-bold text-lg mb-4">선택한 항목</h3>
-
-                {selectedItems.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">항목을 선택해 주세요</p>
-                ) : (
-                  <>
-                    <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
-                      {selectedItems.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                          <span className="text-sm">{item.name}</span>
-                          <span className="text-sm font-medium">{item.price.toLocaleString()}원</span>
+                      {labelPages.length ? (
+                        <Label
+                          rows={labelPages[currentPreview]}
+                          pageNumber={currentPreview + 1}
+                          pageCount={labelPages.length}
+                          totalPrice={totalPrice}
+                        />
+                      ) : (
+                        <div className="placeholder-label">
+                          <span className="placeholder-title">
+                            비급여 진료 내역
+                          </span>
+                          <span className="placeholder-line" />
+                          <span className="placeholder-line short" />
+                          <div>
+                            <span>전체 합계</span>
+                            <span>— 원</span>
+                          </div>
                         </div>
-                      ))}
+                      )}
+                      <span className="dimension-height">30 mm</span>
                     </div>
-
-                    <div className="border-t pt-4">
-                      <div className="flex justify-between items-center text-xl font-bold">
-                        <span>총액</span>
-                        <span className="text-blue-600">{totalPrice.toLocaleString()}원</span>
-                      </div>
+                    <div className="preview-pagination">
+                      <button
+                        className="icon-button"
+                        aria-label="이전 라벨"
+                        disabled={!labelPages.length || currentPreview === 0}
+                        onClick={() => setPreviewIndex(currentPreview - 1)}
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <span>
+                        {labelPages.length ? (
+                          <>
+                            <strong>{currentPreview + 1}</strong> /{" "}
+                            {labelPages.length}장
+                          </>
+                        ) : (
+                          "항목을 선택하면 표시됩니다"
+                        )}
+                      </span>
+                      <button
+                        className="icon-button"
+                        aria-label="다음 라벨"
+                        disabled={
+                          !labelPages.length ||
+                          currentPreview === labelPages.length - 1
+                        }
+                        onClick={() => setPreviewIndex(currentPreview + 1)}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
                     </div>
-                  </>
-                )}
-              </div>
+                    <div className="preview-note">
+                      <Sparkles size={14} />
+                      <span>항목이 많아도 라벨을 자동으로 나눠드려요.</span>
+                    </div>
+                  </section>
+                  <button
+                    className="print-help"
+                    onClick={() => setDialog({ type: "help" })}
+                  >
+                    <CircleHelp size={15} />
+                    처음 출력하시나요? 설정을 확인해 주세요
+                    <ChevronRight size={14} />
+                  </button>
+                </aside>
+              ) : null}
             </div>
-          )}
+            <footer className="workspace-footer">
+              <span>간편한 선택, 정확한 안내.</span>
+              <span>비급여 데스크</span>
+            </footer>
+          </main>
         </div>
+        {!manageMode && selectedItems.length ? (
+          <div className="mobile-print-bar">
+            <a href="#selection-summary" className="mobile-selection-summary">
+              <span>
+                {selectedItems.length}개 선택 <ChevronRight size={12} />
+              </span>
+              <strong>
+                {formatPrice(totalPrice)}
+                <small>원</small>
+              </strong>
+            </a>
+            <button
+              className="button button-primary"
+              onClick={() => window.print()}
+            >
+              <Printer size={17} />
+              라벨 {labelPages.length}장 출력
+            </button>
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="toast" role="status">
+            <Check size={17} />
+            {notice}
+          </div>
+        ) : null}
+        {dialog?.type === "help" ? (
+          <Modal title="라벨 출력 설정" onClose={() => setDialog(null)}>
+            <p className="help-intro">
+              라벨 프린터와 브라우저의 용지 설정을 맞추면 실제 크기로 출력할 수
+              있어요.
+            </p>
+            <ol className="help-steps">
+              <li>
+                <span>1</span>
+                <div>
+                  <strong>라벨 프린터 선택</strong>
+                  <p>인쇄 창의 대상에서 사용할 라벨 프린터를 선택하세요.</p>
+                </div>
+              </li>
+              <li>
+                <span>2</span>
+                <div>
+                  <strong>용지 크기: 가로 50 × 세로 30 mm</strong>
+                  <p>프린터 드라이버에서도 같은 용지 크기를 설정하세요.</p>
+                </div>
+              </li>
+              <li>
+                <span>3</span>
+                <div>
+                  <strong>배율 100% · 여백 없음</strong>
+                  <p>페이지 맞춤을 해제하고 머리글과 바닥글을 끄세요.</p>
+                </div>
+              </li>
+              <li>
+                <span>4</span>
+                <div>
+                  <strong>라벨을 확인한 뒤 출력</strong>
+                  <p>
+                    기본적으로 항목 2개가 한 장에 들어갑니다. 긴 이름은 이어지는
+                    줄로 나누며, 각 라벨에 전체 합계와 페이지 번호를 표시합니다.
+                  </p>
+                </div>
+              </li>
+            </ol>
+            <div className="modal-actions">
+              <button
+                className="button button-primary"
+                onClick={() => setDialog(null)}
+              >
+                확인했어요
+              </button>
+            </div>
+          </Modal>
+        ) : dialog ? (
+          <CatalogDialog
+            key={`${dialog.type}-${dialog.item?.id ?? dialog.category ?? ""}`}
+            dialog={dialog}
+            categories={categories}
+            onSave={saveDialog}
+            onClose={() => setDialog(null)}
+          />
+        ) : null}
       </div>
-
-      {/* 출력용 100x100mm 영역 */}
-      <div className="print-area">
-        <div
-          style={{
-            fontSize: '12px',
-            fontWeight: 'bold',
-            lineHeight: 1.4,
-            marginBottom: '8px'
-          }}
-        >
-          {printTitle}
-        </div>
-
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            marginTop: '4px'
-          }}
-        >
-          <thead>
-            <tr>
-              <th
-                style={{
-                  borderBottom: '1px solid #000',
-                  padding: '3px 0',
-                  textAlign: 'left',
-                  fontSize: '11px'
-                }}
-              >
-                항목
-              </th>
-              <th
-                style={{
-                  borderBottom: '1px solid #000',
-                  padding: '3px 0',
-                  textAlign: 'right',
-                  fontSize: '11px'
-                }}
-              >
-                금액
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {selectedItems.map((item) => (
-              <tr key={item.id}>
-                <td
-                  style={{
-                    borderBottom: '1px solid #ddd',
-                    padding: '3px 0',
-                    fontSize: '10px'
-                  }}
-                >
-                  {item.name}
-                </td>
-                <td
-                  style={{
-                    borderBottom: '1px solid #ddd',
-                    padding: '3px 0',
-                    textAlign: 'right',
-                    fontSize: '10px'
-                  }}
-                >
-                  {item.price.toLocaleString()}원
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div
-          style={{
-            marginTop: '8px',
-            paddingTop: '6px',
-            borderTop: '2px solid #000',
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontWeight: 'bold',
-            fontSize: '12px'
-          }}
-        >
-          <span>총액</span>
-          <span>{totalPrice.toLocaleString()}원</span>
-        </div>
-
-        <div
-          style={{
-            marginTop: '10px',
-            paddingTop: '6px',
-            borderTop: '1px solid #ccc',
-            fontSize: '8px',
-            textAlign: 'center',
-            color: '#666'
-          }}
-        >
-          비급여 항목은 건강보험이 적용되지 않는 비용입니다.
-        </div>
+      <div className="print-area" aria-hidden="true">
+        {labelPages.map((rows, index) => (
+          <Label
+            key={index}
+            rows={rows}
+            pageNumber={index + 1}
+            pageCount={labelPages.length}
+            totalPrice={totalPrice}
+          />
+        ))}
       </div>
     </>
   );
